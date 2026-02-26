@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { GraduationCap, Play, Clock, X, Lock, Crown } from "lucide-react"
+import { GraduationCap, Play, Clock, X, Lock, Crown, BookOpen, ChevronRight, ArrowLeft } from "lucide-react"
 import {
   videoLinks,
   isYouTubeUrl,
@@ -98,6 +98,7 @@ function YouTubeThumbnail({ url }: { url: string }) {
 }
 
 export function NeuralAcademy() {
+  const [view, setView] = useState<"landing" | "videos" | "library">("landing")
   const [activeVideo, setActiveVideo] = useState<VideoLink | null>(null)
   const [activeCategory, setActiveCategory] = useState<string>("Todos")
   const [proModalOpen, setProModalOpen] = useState(false)
@@ -124,8 +125,99 @@ export function NeuralAcademy() {
     }
   }
 
+  // ---- LANDING VIEW ----
+  if (view === "landing") {
+    return (
+      <section className="px-5 pt-2 pb-28">
+        {/* Section header */}
+        <div className="flex items-center gap-2.5 mb-6">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
+            <GraduationCap className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Neural Academy</h2>
+            <p className="text-xs text-muted-foreground">
+              {freeCount} gratis de {videoLinks.length} aulas
+            </p>
+          </div>
+        </div>
+
+        {/* Entry cards */}
+        <div className="flex flex-col gap-3">
+          {/* Videos card */}
+          <button
+            onClick={() => setView("videos")}
+            className="relative flex items-center gap-4 p-5 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/8 to-primary/3 text-left transition-all active:scale-[0.98] group"
+          >
+            <div className="flex items-center justify-center w-14 h-14 rounded-xl bg-primary/15 shrink-0">
+              <Play className="w-6 h-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground mb-0.5">Videos</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Aulas em video sobre neurociencia e biohacking
+              </p>
+              <span className="text-[10px] text-primary font-medium mt-1 inline-block">
+                {videoLinks.length} aulas disponibles
+              </span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground/40 shrink-0 group-hover:text-primary transition-colors" />
+          </button>
+
+          {/* Library card */}
+          <button
+            onClick={() => setView("library")}
+            className="relative flex items-center gap-4 p-5 rounded-2xl border border-[#34D399]/20 bg-gradient-to-r from-[#34D399]/8 to-[#34D399]/3 text-left transition-all active:scale-[0.98] group"
+          >
+            <div className="flex items-center justify-center w-14 h-14 rounded-xl bg-[#34D399]/15 shrink-0">
+              <BookOpen className="w-6 h-6 text-[#34D399]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground mb-0.5">Biblioteca (Artigos)</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Artigos e guias escritos sobre biohacking
+              </p>
+              <span className="text-[10px] text-[#34D399] font-medium mt-1 inline-block">
+                Artigos gratuitos
+              </span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground/40 shrink-0 group-hover:text-[#34D399] transition-colors" />
+          </button>
+        </div>
+
+        <ProModal open={proModalOpen} onClose={() => setProModalOpen(false)} />
+      </section>
+    )
+  }
+
+  // ---- LIBRARY VIEW ----
+  if (view === "library") {
+    return (
+      <section className="px-5 pt-2 pb-28">
+        <button
+          onClick={() => setView("landing")}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4 hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Voltar
+        </button>
+        <BiohackerLibrary />
+      </section>
+    )
+  }
+
+  // ---- VIDEOS VIEW ----
   return (
-    <section className="px-5 mt-6 pb-28">
+    <section className="px-5 pt-2 pb-28">
+      {/* Back button */}
+      <button
+        onClick={() => setView("landing")}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4 hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        Voltar
+      </button>
+
       {/* Section header */}
       <div className="flex items-center gap-2.5 mb-4">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
@@ -195,14 +287,12 @@ export function NeuralAcademy() {
                 )}
 
                 {isFree ? (
-                  /* Play overlay for free */
                   <div className="absolute inset-0 flex items-center justify-center bg-background/30 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="w-8 h-8 rounded-full bg-primary/90 flex items-center justify-center neon-glow">
                       <Play className="w-3.5 h-3.5 text-primary-foreground ml-0.5" />
                     </div>
                   </div>
                 ) : (
-                  /* Lock overlay for PRO */
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
                     <div className="w-8 h-8 rounded-full bg-[#F59E0B]/15 flex items-center justify-center">
                       <Lock className="w-3.5 h-3.5 text-[#F59E0B]" />
@@ -210,7 +300,6 @@ export function NeuralAcademy() {
                   </div>
                 )}
 
-                {/* Duration badge */}
                 {video.duration && (
                   <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-background/80 backdrop-blur-sm">
                     <span className="text-[9px] font-mono text-foreground tabular-nums">
@@ -261,13 +350,9 @@ export function NeuralAcademy() {
         </div>
       )}
 
-      {/* Video modal */}
       {activeVideo && (
         <VideoModal video={activeVideo} onClose={() => setActiveVideo(null)} />
       )}
-
-      {/* Biohacker Library */}
-      <BiohackerLibrary />
 
       <ProModal open={proModalOpen} onClose={() => setProModalOpen(false)} />
     </section>

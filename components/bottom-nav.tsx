@@ -1,8 +1,8 @@
 "use client"
 
-import { Home, ShoppingBag, GraduationCap, Activity, Headphones } from "lucide-react"
+import { Home, ShoppingBag, GraduationCap, Activity, Sunrise } from "lucide-react"
 
-export type Tab = "home" | "academy" | "meditar" | "tracker" | "lojinha"
+export type Tab = "home" | "activation" | "academy" | "tracker" | "arsenal"
 
 interface NavItem {
   id: Tab
@@ -17,14 +17,14 @@ const navItems: NavItem[] = [
     icon: (active) => <Home className="w-[20px] h-[20px]" strokeWidth={active ? 2 : 1.8} />,
   },
   {
+    id: "activation",
+    label: "Ativacao",
+    icon: (active) => <Sunrise className="w-[20px] h-[20px]" strokeWidth={active ? 2 : 1.8} />,
+  },
+  {
     id: "academy",
     label: "Academy",
     icon: (active) => <GraduationCap className="w-[20px] h-[20px]" strokeWidth={active ? 2 : 1.8} />,
-  },
-  {
-    id: "meditar",
-    label: "Meditar",
-    icon: (active) => <Headphones className="w-[20px] h-[20px]" strokeWidth={active ? 2 : 1.8} />,
   },
   {
     id: "tracker",
@@ -32,8 +32,8 @@ const navItems: NavItem[] = [
     icon: (active) => <Activity className="w-[20px] h-[20px]" strokeWidth={active ? 2 : 1.8} />,
   },
   {
-    id: "lojinha",
-    label: "Lojinha",
+    id: "arsenal",
+    label: "Arsenal",
     icon: (active) => <ShoppingBag className="w-[20px] h-[20px]" strokeWidth={active ? 2 : 1.8} />,
   },
 ]

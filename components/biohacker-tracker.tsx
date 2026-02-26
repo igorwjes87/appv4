@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import {
   ScanLine,
   Lock,
@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { ProModal } from "@/components/pro-modal"
+import { analyzeLabel } from "@/lib/gemini"
 
 interface Supplement {
   id: string
@@ -289,24 +290,83 @@ function ScannerOverlay({
   onClose: () => void
   onScanComplete: (result: ScanResult) => void
 }) {
-  const [phase, setPhase] = useState<"scanning" | "done">("scanning")
+  const [phase, setPhase] = useState<"camera" | "scanning" | "done">("camera")
+  const [cameraError, setCameraError] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
-  const startScan = () => {
+  // Start camera
+  useEffect(() => {
+    let cancelled = false
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 640 } },
+        })
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play().catch(() => {})
+        }
+      } catch {
+        setCameraError(true)
+      }
+    }
+    startCamera()
+    return () => {
+      cancelled = true
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
+  const captureAndScan = useCallback(async () => {
     setPhase("scanning")
-    setTimeout(() => {
+
+    let base64 = ""
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      canvas.width = video.videoWidth || 640
+      canvas.height = video.videoHeight || 640
+      const ctx = canvas.getContext("2d")
+      if (ctx) {
+        ctx.drawImage(video, 0, 0)
+        base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1] ?? ""
+      }
+    }
+
+    try {
+      const result = await analyzeLabel(base64)
+      setPhase("done")
+      setTimeout(() => {
+        onScanComplete(result)
+        onClose()
+      }, 600)
+    } catch {
+      // Fallback to mock
       const randomResult = mockScanResults[Math.floor(Math.random() * mockScanResults.length)]
       setPhase("done")
       setTimeout(() => {
         onScanComplete(randomResult)
         onClose()
-      }, 500)
-    }, 3500)
+      }, 600)
+    }
+  }, [onClose, onScanComplete])
+
+  const handleClose = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    onClose()
   }
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/98 backdrop-blur-md">
       <button
-        onClick={onClose}
+        onClick={handleClose}
         className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-full bg-secondary z-20"
         aria-label="Fechar scanner"
       >
@@ -314,17 +374,28 @@ function ScannerOverlay({
       </button>
 
       <div className="flex flex-col items-center gap-5">
-        {/* Scanner viewfinder */}
+        {/* Scanner viewfinder with live camera */}
         <div className="relative w-72 h-72 rounded-2xl overflow-hidden">
-          {/* Background grid */}
-          <div className="absolute inset-0 bg-secondary/30" aria-hidden="true">
-            <div className="absolute inset-0 opacity-10"
-              style={{
-                backgroundImage: `linear-gradient(rgba(0,212,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.3) 1px, transparent 1px)`,
-                backgroundSize: "20px 20px",
-              }}
+          {/* Camera feed */}
+          {!cameraError ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover"
             />
-          </div>
+          ) : (
+            <div className="absolute inset-0 bg-secondary/30 flex items-center justify-center">
+              <div className="text-center">
+                <Camera className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-[11px] text-muted-foreground">Camera indisponivel</p>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden canvas for capture */}
+          <canvas ref={canvasRef} className="hidden" />
 
           {/* Corner brackets */}
           <div className="absolute top-4 left-4 w-10 h-10 border-t-2 border-l-2 border-primary rounded-tl-lg animate-bracket-pulse" />
@@ -336,27 +407,20 @@ function ScannerOverlay({
           {phase === "scanning" && (
             <div className="absolute inset-x-6 h-[2px] animate-laser-scan" style={{ top: "10%" }}>
               <div className="w-full h-full bg-primary rounded-full shadow-[0_0_15px_rgba(0,212,255,0.8),0_0_30px_rgba(0,212,255,0.4),0_0_60px_rgba(0,212,255,0.2)]" />
-              {/* Glow particles */}
               <div className="absolute -top-1 left-1/4 w-1 h-1 rounded-full bg-primary/80 shadow-[0_0_6px_rgba(0,212,255,0.9)]" />
               <div className="absolute -top-0.5 left-1/2 w-0.5 h-0.5 rounded-full bg-primary/60 shadow-[0_0_4px_rgba(0,212,255,0.7)]" />
               <div className="absolute -top-1 left-3/4 w-1 h-1 rounded-full bg-primary/80 shadow-[0_0_6px_rgba(0,212,255,0.9)]" />
             </div>
           )}
 
-          {/* Center icon */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <Camera className="w-10 h-10 text-primary/30 mb-2" />
-            <p className="text-xs text-muted-foreground text-center px-8">
-              {phase === "scanning" ? "Analisando rotulo..." : "Concluido!"}
-            </p>
-          </div>
-
-          {/* Ambient glow */}
-          <div className="absolute inset-0 pointer-events-none"
-            style={{
-              background: "radial-gradient(circle at center, rgba(0,212,255,0.05) 0%, transparent 70%)",
-            }}
-          />
+          {/* Overlay text on camera */}
+          {phase === "camera" && !cameraError && (
+            <div className="absolute inset-0 flex items-end justify-center pb-6">
+              <p className="text-xs text-foreground bg-background/60 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                Aponte a camera para o rotulo
+              </p>
+            </div>
+          )}
         </div>
 
         {phase === "scanning" ? (
@@ -368,20 +432,157 @@ function ScannerOverlay({
               ))}
             </div>
           </div>
-        ) : (
+        ) : phase === "done" ? (
           <div className="flex items-center gap-2 text-[#34D399]">
             <CheckCircle2 className="w-5 h-5" />
             <span className="text-sm font-medium">Analise completa!</span>
           </div>
-        )}
+        ) : null}
 
         <button
-          onClick={startScan}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm neon-glow active:scale-[0.97] transition-all"
+          onClick={captureAndScan}
+          disabled={phase === "scanning"}
+          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm neon-glow active:scale-[0.97] transition-all disabled:opacity-50"
         >
           <ScanLine className="w-4 h-4" />
           {phase === "scanning" ? "Escaneando..." : "Escanear Rotulo"}
         </button>
+      </div>
+    </div>
+  )
+}
+
+/** Neon Modal for scan results */
+function NeonResultModal({
+  result,
+  onClose,
+  onShopClick,
+  onProClick,
+}: {
+  result: ScanResult
+  onClose: () => void
+  onShopClick: () => void
+  onProClick: () => void
+}) {
+  const isElite = result.score >= 60
+  const neonColor = isElite ? "#34D399" : "#FF4D6A"
+  const label = isElite ? "ELITE" : "VENENO"
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-background/90 backdrop-blur-sm"
+        onClick={onClose}
+        role="presentation"
+      />
+      <div
+        className="relative z-10 w-full max-w-sm rounded-3xl border-2 bg-card overflow-hidden animate-in zoom-in-95 duration-300"
+        style={{
+          borderColor: `${neonColor}60`,
+          boxShadow: `0 0 40px ${neonColor}30, 0 0 80px ${neonColor}15, inset 0 1px 0 ${neonColor}20`,
+        }}
+      >
+        {/* Glow bg */}
+        <div
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[200px] opacity-[0.08] pointer-events-none"
+          style={{
+            background: `radial-gradient(circle, ${neonColor} 0%, transparent 70%)`,
+          }}
+          aria-hidden="true"
+        />
+
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-full bg-secondary/80 text-muted-foreground z-10"
+          aria-label="Fechar"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="relative px-6 pt-8 pb-6">
+          {/* Score circle */}
+          <div className="flex flex-col items-center mb-5">
+            <div
+              className="flex items-center justify-center w-20 h-20 rounded-full border-3 mb-3"
+              style={{
+                borderColor: neonColor,
+                boxShadow: `0 0 20px ${neonColor}40, inset 0 0 15px ${neonColor}15`,
+              }}
+            >
+              <span className="text-2xl font-bold font-mono" style={{ color: neonColor }}>
+                {result.score}
+              </span>
+            </div>
+            <span
+              className="text-lg font-black tracking-widest"
+              style={{
+                color: neonColor,
+                textShadow: `0 0 15px ${neonColor}60`,
+              }}
+            >
+              {label}
+            </span>
+            <p className="text-sm text-foreground font-semibold mt-1">{result.productName}</p>
+          </div>
+
+          {/* Found harmful */}
+          {result.found.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <XCircle className="w-3.5 h-3.5 text-destructive" />
+                <span className="text-[11px] font-semibold text-destructive">Ingredientes prejudiciais</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {result.found.map((item) => (
+                  <div key={item.code} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-secondary/40">
+                    <span className="text-[10px] font-bold font-mono text-destructive">{item.code}</span>
+                    <span className="text-[11px] text-foreground flex-1">{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Safe */}
+          {result.safe.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#34D399]" />
+                <span className="text-[11px] font-semibold text-[#34D399]">Seguros</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {result.safe.map((item) => (
+                  <span key={item} className="text-[10px] px-2 py-1 rounded-lg bg-[#34D399]/10 text-[#34D399] font-medium">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Shop recommendation */}
+          {result.shopRecommendation && (
+            <button
+              onClick={onShopClick}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-left mb-3"
+            >
+              <ShoppingBag className="w-4 h-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-foreground">{result.shopRecommendation.name}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{result.shopRecommendation.reason}</p>
+              </div>
+            </button>
+          )}
+
+          {/* PRO analysis */}
+          <button
+            onClick={onProClick}
+            className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#F97316] text-[#07070D] text-xs font-bold transition-all active:scale-[0.97] shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+          >
+            <Crown className="w-3.5 h-3.5" />
+            Analise Bio-Individual (PRO)
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -587,20 +788,27 @@ export function BiohackerTracker({ onNavigateToShop }: { onNavigateToShop?: () =
         </div>
       </div>
 
-      {/* Scan result */}
-      {scanResult && (
-        <ScanResultCard
-          result={scanResult}
-          onShopClick={() => onNavigateToShop?.()}
-          onProClick={() => setProModalOpen(true)}
-        />
-      )}
-
       {/* Scanner Modal */}
       {scannerOpen && (
         <ScannerOverlay
           onClose={() => setScannerOpen(false)}
           onScanComplete={(result) => setScanResult(result)}
+        />
+      )}
+
+      {/* Neon Result Modal */}
+      {scanResult && !scannerOpen && (
+        <NeonResultModal
+          result={scanResult}
+          onClose={() => setScanResult(null)}
+          onShopClick={() => {
+            setScanResult(null)
+            onNavigateToShop?.()
+          }}
+          onProClick={() => {
+            setScanResult(null)
+            setProModalOpen(true)
+          }}
         />
       )}
 

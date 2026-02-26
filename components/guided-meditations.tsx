@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState } from "react"
 import {
   Headphones,
   Play,
@@ -23,6 +23,7 @@ import {
   type MeditationLink,
 } from "@/lib/media-links"
 import { ProModal } from "@/components/pro-modal"
+import { useAudioPlayer, type AudioTrack } from "@/lib/audio-context"
 
 const categoryConfig: Record<
   MeditationLink["category"],
@@ -39,60 +40,35 @@ const allCategories: MeditationLink["category"][] = ["foco", "sono", "ansiedade"
 
 export function GuidedMeditations() {
   const [activeCategory, setActiveCategory] = useState<"todos" | MeditationLink["category"]>("todos")
-  const [playingId, setPlayingId] = useState<string | null>(null)
   const [proModalOpen, setProModalOpen] = useState(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const { toggle, isPlaying: globalPlaying, isCurrentTrack } = useAudioPlayer()
 
   const filtered = activeCategory === "todos"
     ? meditationLinks
     : meditationLinks.filter((m) => m.category === activeCategory)
 
-  const handlePlay = useCallback(
-    (med: MeditationLink) => {
-      // Check if free
-      if (!med.isFree) {
-        setProModalOpen(true)
-        return
-      }
+  const handlePlay = (med: MeditationLink) => {
+    if (!med.isFree) {
+      setProModalOpen(true)
+      return
+    }
 
-      // If already playing this one, pause
-      if (playingId === med.id) {
-        audioRef.current?.pause()
-        setPlayingId(null)
-        return
-      }
+    const isSpotify = isSpotifyUrl(med.url)
+    const audioUrl = isGoogleDriveUrl(med.url)
+      ? getGoogleDriveAudioUrl(med.url) ?? med.url
+      : med.url
 
-      // Spotify: open in new tab
-      if (isSpotifyUrl(med.url)) {
-        window.open(med.url, "_blank", "noopener,noreferrer")
-        return
-      }
-
-      // Google Drive: play inline
-      if (isGoogleDriveUrl(med.url)) {
-        const audioUrl = getGoogleDriveAudioUrl(med.url)
-        if (!audioUrl) return
-
-        if (audioRef.current) {
-          audioRef.current.pause()
-          audioRef.current.src = ""
-        }
-
-        const audio = new Audio(audioUrl)
-        audio.crossOrigin = "anonymous"
-        audioRef.current = audio
-        audio.play().catch(() => {
-          window.open(med.url, "_blank", "noopener,noreferrer")
-        })
-        audio.addEventListener("ended", () => setPlayingId(null))
-        setPlayingId(med.id)
-        return
-      }
-
-      window.open(med.url, "_blank", "noopener,noreferrer")
-    },
-    [playingId]
-  )
+    const cfg = categoryConfig[med.category]
+    const track: AudioTrack = {
+      id: med.id,
+      title: med.title,
+      subtitle: med.description,
+      url: audioUrl,
+      accentColor: cfg.color,
+      source: isSpotify ? "spotify" : "inline",
+    }
+    toggle(track)
+  }
 
   const freeCount = meditationLinks.filter((m) => m.isFree).length
 
@@ -151,7 +127,7 @@ export function GuidedMeditations() {
       <div className="flex flex-col gap-3">
         {filtered.map((med) => {
           const cfg = categoryConfig[med.category]
-          const isPlaying = playingId === med.id
+          const isPlaying = isCurrentTrack(med.id) && globalPlaying
           const isFree = !!med.isFree
           const isSpotify = isSpotifyUrl(med.url)
 

@@ -1,6 +1,5 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
 import { Headphones, Play, Pause, ExternalLink, Volume2 } from "lucide-react"
 import {
   playlistLinks,
@@ -9,6 +8,7 @@ import {
   getGoogleDriveAudioUrl,
   type PlaylistLink,
 } from "@/lib/media-links"
+import { useAudioPlayer, type AudioTrack } from "@/lib/audio-context"
 
 function WaveIcon({ color }: { color: string }) {
   return (
@@ -90,52 +90,24 @@ const gradientMap: Record<PlaylistLink["icon"], string> = {
 }
 
 export function NeuralPlaylists() {
-  const [playingId, setPlayingId] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const { toggle, isPlaying: globalPlaying, isCurrentTrack } = useAudioPlayer()
 
-  const handlePlay = useCallback(
-    (playlist: PlaylistLink) => {
-      // Se ja esta tocando esse, pausa
-      if (playingId === playlist.id) {
-        audioRef.current?.pause()
-        setPlayingId(null)
-        return
-      }
+  const handlePlay = (playlist: PlaylistLink) => {
+    const isSpotify = isSpotifyUrl(playlist.url)
+    const audioUrl = isGoogleDriveUrl(playlist.url)
+      ? getGoogleDriveAudioUrl(playlist.url) ?? playlist.url
+      : playlist.url
 
-      // Spotify: abre nova aba
-      if (isSpotifyUrl(playlist.url)) {
-        window.open(playlist.url, "_blank", "noopener,noreferrer")
-        return
-      }
-
-      // Google Drive: toca inline
-      if (isGoogleDriveUrl(playlist.url)) {
-        const audioUrl = getGoogleDriveAudioUrl(playlist.url)
-        if (!audioUrl) return
-
-        // Para audio anterior
-        if (audioRef.current) {
-          audioRef.current.pause()
-          audioRef.current.src = ""
-        }
-
-        const audio = new Audio(audioUrl)
-        audio.crossOrigin = "anonymous"
-        audioRef.current = audio
-        audio.play().catch(() => {
-          // Se nao conseguir tocar (CORS, etc), abre em nova aba
-          window.open(playlist.url, "_blank", "noopener,noreferrer")
-        })
-        audio.addEventListener("ended", () => setPlayingId(null))
-        setPlayingId(playlist.id)
-        return
-      }
-
-      // Fallback: abre em nova aba
-      window.open(playlist.url, "_blank", "noopener,noreferrer")
-    },
-    [playingId]
-  )
+    const track: AudioTrack = {
+      id: playlist.id,
+      title: playlist.title,
+      subtitle: playlist.subtitle,
+      url: audioUrl,
+      accentColor: playlist.accentColor,
+      source: isSpotify ? "spotify" : "inline",
+    }
+    toggle(track)
+  }
 
   const isSpotify = (url: string) => isSpotifyUrl(url)
   const isDrive = (url: string) => isGoogleDriveUrl(url)
@@ -158,7 +130,7 @@ export function NeuralPlaylists() {
       {/* Playlist grid */}
       <div className="grid grid-cols-2 gap-3">
         {playlistLinks.map((playlist) => {
-          const isPlaying = playingId === playlist.id
+          const isPlaying = isCurrentTrack(playlist.id) && globalPlaying
           const spotifyLink = isSpotify(playlist.url)
           const driveLink = isDrive(playlist.url)
 

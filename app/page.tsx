@@ -2,16 +2,22 @@
 
 import { useState } from "react"
 import { AppHeader } from "@/components/app-header"
-import { MorningChecklist } from "@/components/morning-checklist"
+import { PromoBanner } from "@/components/promo-banner"
+import { HomeDashboard } from "@/components/home-dashboard"
 import { NeuralPlaylists } from "@/components/neural-playlists"
+import { GammaFocusButton } from "@/components/gamma-focus-button"
 import { NeuralAcademy } from "@/components/neural-academy"
-import { BrainDump } from "@/components/brain-dump"
-import { Lojinha } from "@/components/lojinha"
+import { MorningActivation } from "@/components/morning-activation"
+import { Arsenal } from "@/components/arsenal"
 import { BiohackerTracker } from "@/components/biohacker-tracker"
 import { BottomNav, type Tab } from "@/components/bottom-nav"
+import { BrainDumpFab } from "@/components/brain-dump-fab"
+import { StickyAudioPlayer } from "@/components/sticky-audio-player"
+import { ProModal } from "@/components/pro-modal"
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home")
+  const [proModalOpen, setProModalOpen] = useState(false)
 
   return (
     <div className="min-h-dvh bg-background max-w-md mx-auto relative">
@@ -25,26 +31,41 @@ export default function HomePage() {
       />
 
       {/* Scrollable content */}
-      <main className="relative z-10">
+      <main className="relative z-10 pb-36">
         <AppHeader />
 
         {activeTab === "home" && (
           <>
-            <MorningChecklist />
+            <PromoBanner
+              onOpenPro={() => setProModalOpen(true)}
+              onNavigateToTab={(tab) => setActiveTab(tab as Tab)}
+            />
+            <HomeDashboard onNavigateToTab={(tab) => setActiveTab(tab as Tab)} />
+            <GammaFocusButton />
             <NeuralPlaylists />
           </>
         )}
 
+        {activeTab === "activation" && <MorningActivation />}
+
         {activeTab === "academy" && <NeuralAcademy />}
 
-        {activeTab === "braindump" && <BrainDump />}
+        {activeTab === "tracker" && (
+          <BiohackerTracker onNavigateToShop={() => setActiveTab("arsenal")} />
+        )}
 
-        {activeTab === "tracker" && <BiohackerTracker />}
-
-        {activeTab === "lojinha" && <Lojinha />}
+        {activeTab === "arsenal" && <Arsenal />}
       </main>
 
+      {/* Sticky Audio Player - above BottomNav */}
+      <StickyAudioPlayer />
+
+      {/* Brain Dump FAB */}
+      <BrainDumpFab />
+
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <ProModal open={proModalOpen} onClose={() => setProModalOpen(false)} />
     </div>
   )
 }
